@@ -115,7 +115,7 @@ router.post(
 );
 
 // Get all products
-router.get('/', async (req, res) => {
+router.get('/api/', async (req, res) => {
   try {
     const products = await Product.find();
     res.json(products);
