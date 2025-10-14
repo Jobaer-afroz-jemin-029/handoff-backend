@@ -6,8 +6,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 require('dotenv').config(); // Load environment variables
-const { Resend } = require('resend');
-
+const Sib = require('sib-api-v3-sdk');
 const app = express();
 const port = process.env.PORT || 8000;
 
@@ -33,34 +32,42 @@ const productRoutes = require('./routes/product');
 // ============= Using Resend for Email Verification =============
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+
+
 const sendVerificationEmail = async (email, verificationToken) => {
   try {
-    const verificationLink = `https://handoff-backend.onrender.com/verify/${verificationToken}`;
+    // Configure Brevo client
+    const client = Sib.ApiClient.instance;
+    client.authentications['api-key'].apiKey = process.env.BREVO_API_KEY;
 
-    const response = await resend.emails.send({
-      from: 'HandOff <onboarding@resend.dev>', // You can change this to your verified domain later
-      to: email,
+    const tranEmailApi = new Sib.TransactionalEmailsApi();
+
+    // Email content
+    const sender = {
+      email: 'jobaerafroz4@gmail.com',  
+      name: 'HandOff Team',
+    };
+
+    const receivers = [{ email }];
+
+    await tranEmailApi.sendTransacEmail({
+      sender,
+      to: receivers,
       subject: 'Verify your HandOff account',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 16px; border: 1px solid #ddd; border-radius: 8px;">
-          <h2>Welcome to HandOff 🎉</h2>
-          <p>Hi ${email.split('@')[0]},</p>
-          <p>Please verify your email by clicking the button below:</p>
-          <a href="${verificationLink}" 
-             style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; 
-                    text-decoration: none; border-radius: 5px;">Verify Email</a>
-          <p style="margin-top: 10px;">If the button doesn’t work, copy and paste this link:</p>
-          <p>${verificationLink}</p>
-          <hr />
-          <p style="font-size: 12px; color: #777;">This is an automated message. Please do not reply.</p>
-        </div>
+      htmlContent: `
+        <p>Hello,</p>
+        <p>Please verify your email by clicking the link below:</p>
+        <a href="https://handoff-backend.onrender.com/verify/${verificationToken}">
+          Verify Email
+        </a>
+        <p>Thank you,<br>HandOff Team</p>
       `,
     });
 
-    console.log('✅ Verification email sent:', response);
+    console.log('Verification email sent to', email);
     return true;
   } catch (error) {
-    console.error('❌ Error sending verification email via Resend:', error);
+    console.error('Error sending email with Brevo:', error);
     return false;
   }
 };
