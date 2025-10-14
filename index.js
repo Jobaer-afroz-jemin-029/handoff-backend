@@ -33,7 +33,7 @@ const productRoutes = require('./routes/product');
 // Send Verification Email Function (calls Vercel endpoint)
 const sendVerificationEmail = async (email, verificationToken) => {
   try {
-    const vercelEndpoint = 'https://send-mail-plum-mu.vercel.app/api/sendemail'; // Replace with your Vercel endpoint
+    const vercelEndpoint = 'https://send-mail-swart.vercel.app/api/sendemail'; // Replace with your Vercel endpoint
     const response = await axios.post(
       vercelEndpoint,
       {
