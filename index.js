@@ -31,23 +31,21 @@ const productRoutes = require('./routes/product');
 
 
 
+const defaultClient = SibApiV3Sdk.ApiClient.instance;
+defaultClient.authentications['api-key'].apiKey = process.env.BREVO_API_KEY;
+
+const tranEmailApi = new SibApiV3Sdk.TransactionalEmailsApi();
+
 const sendVerificationEmail = async (email, verificationToken) => {
   try {
-    // Configure Brevo client
-    const client = Sib.ApiClient.instance;
-    client.authentications['api-key'].apiKey = process.env.BREVO_API_KEY;
-
-    const tranEmailApi = new Sib.TransactionalEmailsApi();
-
-    // Email content
     const sender = {
-      email: 'jobaerafroz4@gmail.com',  
+      email: 'jobaerafroz4@gmail.com',  // Verified email
       name: 'HandOff Team',
     };
 
     const receivers = [{ email }];
 
-    await tranEmailApi.sendTransacEmail({
+    const response = await tranEmailApi.sendTransacEmail({
       sender,
       to: receivers,
       subject: 'Verify your HandOff account',
@@ -61,13 +59,15 @@ const sendVerificationEmail = async (email, verificationToken) => {
       `,
     });
 
-    console.log('Verification email sent to', email);
+    console.log('✅ Verification email sent to', email, response);
     return true;
   } catch (error) {
-    console.error('Error sending email with Brevo:', error);
+    console.error('❌ Error sending email with Brevo:', error.response?.body || error.message);
     return false;
   }
 };
+
+module.exports = sendVerificationEmail;
 
 // =================== Registration Route ===================
 app.post('/register', async (req, res) => {
