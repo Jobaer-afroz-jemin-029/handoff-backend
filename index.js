@@ -2,18 +2,18 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-require('dotenv').config(); // For environment variables
+require('dotenv').config(); // Load environment variables
+const { Resend } = require('resend');
 
 const app = express();
 const port = process.env.PORT || 8000;
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json()); // Only JSON parsing is needed for the frontend
+app.use(bodyParser.json());
 
 // MongoDB Connection
 mongoose
@@ -21,43 +21,51 @@ mongoose
     process.env.MONGO_URI ||
       'mongodb+srv://jobaerafroz4:qwerty123456@cluster0.vp15qty.mongodb.net/'
   )
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((err) => console.error('Error connecting to MongoDB:', err));
+  .then(() => console.log('✅ Connected to MongoDB'))
+  .catch((err) => console.error('❌ Error connecting to MongoDB:', err));
 
-// User Model (assumed to be in ./models/user)
+// User Model
 const User = require('./models/user');
 
 // Import product routes
 const productRoutes = require('./routes/product');
 
-// Nodemailer Transport for Email Verification
+// ============= Using Resend for Email Verification =============
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 const sendVerificationEmail = async (email, verificationToken) => {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER || '22235103029@cse.bubt.edu.bd',
-      pass: process.env.EMAIL_PASS || 'rldwfewpafzkndnx',
-    },
-  });
-
-  const mailOptions = {
-    from: 'Handoff<no-reply@handoff.com>',
-    to: email,
-    subject: 'Email Verification',
-    //text: `Please click the link to verify your email: http://192.168.1.105:8000/verify/${verificationToken}`,
-    text: `Please click the link to verify your email: https://handoff-backend.onrender.com/verify/${verificationToken}`,
-  };
-
   try {
-    await transporter.sendMail(mailOptions);
+    const verificationLink = `https://handoff-backend.onrender.com/verify/${verificationToken}`;
+
+    const response = await resend.emails.send({
+      from: 'HandOff <onboarding@resend.dev>', // You can change this to your verified domain later
+      to: email,
+      subject: 'Verify your HandOff account',
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 16px; border: 1px solid #ddd; border-radius: 8px;">
+          <h2>Welcome to HandOff 🎉</h2>
+          <p>Hi ${email.split('@')[0]},</p>
+          <p>Please verify your email by clicking the button below:</p>
+          <a href="${verificationLink}" 
+             style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; 
+                    text-decoration: none; border-radius: 5px;">Verify Email</a>
+          <p style="margin-top: 10px;">If the button doesn’t work, copy and paste this link:</p>
+          <p>${verificationLink}</p>
+          <hr />
+          <p style="font-size: 12px; color: #777;">This is an automated message. Please do not reply.</p>
+        </div>
+      `,
+    });
+
+    console.log('✅ Verification email sent:', response);
     return true;
   } catch (error) {
-    console.error('Error sending verification email:', error);
+    console.error('❌ Error sending verification email via Resend:', error);
     return false;
   }
 };
 
-// Registration Route
+// =================== Registration Route ===================
 app.post('/register', async (req, res) => {
   try {
     const { varsityId, fullName, email, password } = req.body;
@@ -93,13 +101,13 @@ app.post('/register', async (req, res) => {
       email,
       password: hashedPassword,
       verificationToken: crypto.randomBytes(20).toString('hex'),
-      verified: false, // Ensure verified is false by default
+      verified: false,
     });
 
     // Save user to MongoDB
     await newUser.save();
 
-    // Send verification email
+    // Send verification email via Resend
     const emailSent = await sendVerificationEmail(
       newUser.email,
       newUser.verificationToken
@@ -121,7 +129,6 @@ app.post('/register', async (req, res) => {
       .json({ message: 'Registration failed', error: error.message });
   }
 });
-
 // Email Verification Route
 app.get('/verify/:token', async (req, res) => {
   try {
