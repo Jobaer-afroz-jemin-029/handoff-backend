@@ -2,18 +2,18 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-require('dotenv').config(); // For environment variables
+const axios = require('axios'); // Added for HTTP requests to Vercel
+require('dotenv').config(); // Load environment variables
 
 const app = express();
 const port = process.env.PORT || 8000;
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json()); // Only JSON parsing is needed for the frontend
+app.use(bodyParser.json());
 
 // MongoDB Connection
 mongoose
@@ -21,43 +21,47 @@ mongoose
     process.env.MONGO_URI ||
       'mongodb+srv://jobaerafroz4:qwerty123456@cluster0.vp15qty.mongodb.net/'
   )
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((err) => console.error('Error connecting to MongoDB:', err));
+  .then(() => console.log('✅ Connected to MongoDB'))
+  .catch((err) => console.error('❌ Error connecting to MongoDB:', err));
 
-// User Model (assumed to be in ./models/user)
+// User Model
 const User = require('./models/user');
 
 // Import product routes
 const productRoutes = require('./routes/product');
 
-// Nodemailer Transport for Email Verification
+// Send Verification Email Function (calls Vercel endpoint)
 const sendVerificationEmail = async (email, verificationToken) => {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER || '22235103029@cse.bubt.edu.bd',
-      pass: process.env.EMAIL_PASS || 'rldwfewpafzkndnx',
-    },
-  });
-
-  const mailOptions = {
-    from: 'Handoff<no-reply@handoff.com>',
-    to: email,
-    subject: 'Email Verification',
-    //text: `Please click the link to verify your email: http://192.168.1.105:8000/verify/${verificationToken}`,
-    text: `Please click the link to verify your email: https://handoff-backend.onrender.com/verify/${verificationToken}`,
-  };
-
   try {
-    await transporter.sendMail(mailOptions);
-    return true;
+    const vercelEndpoint = 'https://send-mail-plum-mu.vercel.app/api/sendemail'; // Replace with your Vercel endpoint
+    const response = await axios.post(
+      vercelEndpoint,
+      {
+        email,
+        verificationToken,
+      },
+      {
+        headers: {
+          'x-api-key': process.env.API_KEY, // Secure API key
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (response.status === 200) {
+      console.log('✅ Verification email sent to', email);
+      return true;
+    } else {
+      console.error('❌ Failed to send verification email:', response.data.message);
+      return false;
+    }
   } catch (error) {
-    console.error('Error sending verification email:', error);
+    console.error('❌ Error sending email via Vercel:', error.message);
     return false;
   }
 };
 
-// Registration Route
+// =================== Registration Route ===================
 app.post('/register', async (req, res) => {
   try {
     const { varsityId, fullName, email, password } = req.body;
@@ -93,13 +97,13 @@ app.post('/register', async (req, res) => {
       email,
       password: hashedPassword,
       verificationToken: crypto.randomBytes(20).toString('hex'),
-      verified: false, // Ensure verified is false by default
+      verified: false,
     });
 
     // Save user to MongoDB
     await newUser.save();
 
-    // Send verification email
+    // Send verification email via Vercel
     const emailSent = await sendVerificationEmail(
       newUser.email,
       newUser.verificationToken
@@ -147,7 +151,6 @@ app.get('/verify/:token', async (req, res) => {
 });
 
 // Login Route
-// In index.js, update /login route
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -189,7 +192,7 @@ app.post('/api/login', async (req, res) => {
 
     const token = jwt.sign(
       { userId: user._id },
-      process.env.JWT_SECRET ,
+      process.env.JWT_SECRET,
       {
         expiresIn: '1h',
       }
