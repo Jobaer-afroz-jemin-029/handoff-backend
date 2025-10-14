@@ -36,7 +36,7 @@ const sendVerificationEmail = async (email, verificationToken) => {
     service: 'gmail',
     auth: {
       user: process.env.EMAIL_USER || '22235103029@cse.bubt.edu.bd',
-      pass: process.env.EMAIL_PASS || 'ntxjimhiqnsvipkn',
+      pass: process.env.EMAIL_PASS || 'rldwfewpafzkndnx',
     },
   });
 
