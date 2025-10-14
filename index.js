@@ -29,9 +29,6 @@ const User = require('./models/user');
 // Import product routes
 const productRoutes = require('./routes/product');
 
-// ============= Using Resend for Email Verification =============
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 
 
 const sendVerificationEmail = async (email, verificationToken) => {
