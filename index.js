@@ -201,7 +201,13 @@ app.post('/api/login', async (req, res) => {
     res.json({
       token,
       isVerified: true,
-      user: { varsityId: user.varsityId, name: user.name, email: user.email, role: user.role },
+      user: { 
+        varsityId: user.varsityId, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role,
+        facebookId: user.facebookId 
+      },
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -209,7 +215,72 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Product Routes
+// =================== User Profile Routes ===================
+
+// Update user profile (including Facebook ID)
+app.patch('/api/user/profile', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Access token required' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Update Facebook ID if provided
+    if (req.body.facebookId !== undefined) {
+      user.facebookId = req.body.facebookId;
+    }
+
+    await user.save();
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        varsityId: user.varsityId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        facebookId: user.facebookId,
+      },
+    });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ message: 'Failed to update profile', error: error.message });
+  }
+});
+
+// Get user by varsityId (to fetch seller's Facebook ID)
+app.get('/api/user/varsity/:varsityId', async (req, res) => {
+  try {
+    console.log('Fetching user by varsityId:', req.params.varsityId);
+    const user = await User.findOne({ varsityId: req.params.varsityId });
+    
+    if (!user) {
+      console.log('User not found for varsityId:', req.params.varsityId);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    console.log('User found:', { varsityId: user.varsityId, name: user.name, hasFacebookId: !!user.facebookId });
+    res.json({
+      varsityId: user.varsityId,
+      name: user.name,
+      facebookId: user.facebookId,
+    });
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Failed to fetch user', error: error.message });
+  }
+});
+
+// =================== Product Routes ===================
 app.use('/api/products', productRoutes);
 
 // Start Server
