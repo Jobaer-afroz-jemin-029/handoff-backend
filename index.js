@@ -61,6 +61,36 @@ const sendVerificationEmail = async (email, verificationToken) => {
   }
 };
 
+// Send Reset Password Email via Vercel
+const sendResetPasswordEmail = async (email, resetToken) => {
+  try {
+    const vercelEndpoint = 'https://send-mail-swart.vercel.app/api/sendreset';
+    const response = await axios.post(
+      vercelEndpoint,
+      {
+        email,
+        resetToken,
+      },
+      {
+        headers: {
+          'x-api-key': process.env.API_KEY,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    if (response.status === 200) {
+      console.log('✅ Reset email sent to', email);
+      return true;
+    } else {
+      console.error('❌ Failed to send reset email:', response.data.message);
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Error sending reset email via Vercel:', error.message);
+    return false;
+  }
+};
+
 // =================== Registration Route ===================
 app.post('/register', async (req, res) => {
   try {
@@ -277,6 +307,67 @@ app.get('/api/user/varsity/:varsityId', async (req, res) => {
   } catch (error) {
     console.error('Error fetching user:', error);
     res.status(500).json({ message: 'Failed to fetch user', error: error.message });
+  }
+});
+
+// =================== Password Reset Routes ===================
+
+// Request password reset
+app.post('/api/password/forgot', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Do not reveal whether the email exists
+      return res.status(200).json({ message: 'If an account exists, a reset email has been sent' });
+    }
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    user.resetToken = resetToken;
+    user.resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await user.save();
+
+    const emailSent = await sendResetPasswordEmail(user.email, resetToken);
+    if (!emailSent) {
+      return res.status(500).json({ message: 'Failed to send reset email' });
+    }
+
+    res.json({ message: 'If an account exists, a reset email has been sent' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: 'Failed to process request', error: error.message });
+  }
+});
+
+// Reset password
+app.post('/api/password/reset', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      return res.status(400).json({ message: 'Token and new password are required' });
+    }
+
+    const user = await User.findOne({
+      resetToken: token,
+      resetTokenExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    user.password = hashedPassword;
+    user.resetToken = undefined;
+    user.resetTokenExpires = undefined;
+    await user.save();
+
+    res.json({ message: 'Password reset successful' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Failed to reset password', error: error.message });
   }
 });
 
