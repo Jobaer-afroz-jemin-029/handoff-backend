@@ -12,6 +12,8 @@ const userSchema = new mongoose.Schema({
   verificationToken: String,
   role: { type: String, enum: ['user', 'admin'], default: 'user' }, // Add admin role
   facebookId: { type: String }, // Facebook ID for chat redirection
+  resetToken: String,
+  resetTokenExpires: Date,
   address: [
     {
       name: String,
