@@ -30,15 +30,15 @@ const User = require('./models/user');
 // Import product routes
 const productRoutes = require('./routes/product');
 
-// Send Verification Email Function (calls Vercel endpoint)
-const sendVerificationEmail = async (email, verificationToken) => {
+// Send Verification Email Function (calls Vercel endpoint) - Now sends 6-digit code
+const sendVerificationEmail = async (email, verificationCode) => {
   try {
     const vercelEndpoint = 'https://send-mail-swart.vercel.app/api/sendemail'; // Replace with your Vercel endpoint
     const response = await axios.post(
       vercelEndpoint,
       {
         email,
-        verificationToken,
+        verificationCode, // Changed from verificationToken to verificationCode
       },
       {
         headers: {
@@ -128,6 +128,9 @@ app.post('/register', async (req, res) => {
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Generate 6-digit verification code (like reset password)
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
     // Create new user
     const newUser = new User({
       varsityId,
@@ -135,17 +138,17 @@ app.post('/register', async (req, res) => {
       email,
       password: hashedPassword,
       phoneNumber: phoneNumber.trim(), // Save the phone number for WhatsApp chat
-      verificationToken: crypto.randomBytes(20).toString('hex'),
+      verificationToken: verificationCode, // Store 6-digit code instead of token
       verified: false,
     });
 
     // Save user to MongoDB
     await newUser.save();
 
-    // Send verification email via Vercel
+    // Send verification email via Vercel with 6-digit code
     const emailSent = await sendVerificationEmail(
       newUser.email,
-      newUser.verificationToken
+      verificationCode
     );
     if (!emailSent) {
       return res
@@ -155,7 +158,8 @@ app.post('/register', async (req, res) => {
 
     res.status(201).json({
       message:
-        'Registration successful! Please check your email for verification',
+        'Registration successful! Please check your email for the 6-digit verification code',
+      email: newUser.email, // Return email for verification screen
     });
   } catch (error) {
     console.error('Error registering user:', error);
@@ -165,14 +169,22 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// Email Verification Route
-app.get('/verify/:token', async (req, res) => {
+// Email Verification Route - Now accepts 6-digit code via POST
+app.post('/api/verify-email', async (req, res) => {
   try {
-    const token = req.params.token;
-    const user = await User.findOne({ verificationToken: token });
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Email and code are required' });
+    }
+
+    const user = await User.findOne({ 
+      email,
+      verificationToken: code,
+    });
 
     if (!user) {
-      return res.status(404).json({ message: 'Invalid verification token' });
+      return res.status(400).json({ message: 'Invalid or expired verification code' });
     }
 
     // Update user verification status
@@ -180,7 +192,10 @@ app.get('/verify/:token', async (req, res) => {
     user.verificationToken = undefined;
     await user.save();
 
-    res.status(200).json({ message: 'Email verified successfully' });
+    res.status(200).json({ 
+      message: 'Email verified successfully',
+      verified: true 
+    });
   } catch (error) {
     console.error('Email verification failed:', error);
     res
