@@ -312,7 +312,7 @@ app.get('/api/user/varsity/:varsityId', async (req, res) => {
 
 // =================== Password Reset Routes ===================
 
-// Request password reset
+// Request password reset - sends 6-digit code
 app.post('/api/password/forgot', async (req, res) => {
   try {
     const { email } = req.body;
@@ -322,40 +322,73 @@ app.post('/api/password/forgot', async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) {
       // Do not reveal whether the email exists
-      return res.status(200).json({ message: 'If an account exists, a reset email has been sent' });
+      return res.status(200).json({ message: 'If an account exists, a reset code has been sent' });
     }
-    const resetToken = crypto.randomBytes(20).toString('hex');
-    user.resetToken = resetToken;
-    user.resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    
+    // Generate 6-digit code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetToken = resetCode;
+    user.resetTokenExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     await user.save();
 
-    const emailSent = await sendResetPasswordEmail(user.email, resetToken);
+    const emailSent = await sendResetPasswordEmail(user.email, resetCode);
     if (!emailSent) {
-      return res.status(500).json({ message: 'Failed to send reset email' });
+      return res.status(500).json({ message: 'Failed to send reset code' });
     }
 
-    res.json({ message: 'If an account exists, a reset email has been sent' });
+    res.json({ message: 'If an account exists, a reset code has been sent' });
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({ message: 'Failed to process request', error: error.message });
   }
 });
 
-// Reset password
-app.post('/api/password/reset', async (req, res) => {
+// Verify reset code
+app.post('/api/password/verify-code', async (req, res) => {
   try {
-    const { token, password } = req.body;
-    if (!token || !password) {
-      return res.status(400).json({ message: 'Token and new password are required' });
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Email and code are required' });
     }
 
     const user = await User.findOne({
-      resetToken: token,
+      email,
+      resetToken: code,
       resetTokenExpires: { $gt: new Date() },
     });
 
     if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired reset token' });
+      return res.status(400).json({ message: 'Invalid or expired code' });
+    }
+
+    // Code is valid, return success (don't reset token yet, wait for password reset)
+    res.json({ message: 'Code verified successfully', verified: true });
+  } catch (error) {
+    console.error('Verify code error:', error);
+    res.status(500).json({ message: 'Failed to verify code', error: error.message });
+  }
+});
+
+// Reset password with verified code
+app.post('/api/password/reset', async (req, res) => {
+  try {
+    const { email, code, password } = req.body;
+    if (!email || !code || !password) {
+      return res.status(400).json({ message: 'Email, code, and new password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    const user = await User.findOne({
+      email,
+      resetToken: code,
+      resetTokenExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired code' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
