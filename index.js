@@ -94,13 +94,21 @@ const sendResetPasswordEmail = async (email, resetToken) => {
 // =================== Registration Route ===================
 app.post('/register', async (req, res) => {
   try {
-    const { varsityId, fullName, email, password } = req.body;
+    const { varsityId, fullName, email, password, phoneNumber } = req.body;
 
     // Validate required fields
-    if (!varsityId || !fullName || !email || !password) {
+    if (!varsityId || !fullName || !email || !password || !phoneNumber) {
       return res.status(400).json({
         message:
-          'All fields (varsityId, fullName, email, password) are required',
+          'All fields (varsityId, fullName, email, phoneNumber, password) are required',
+      });
+    }
+
+    // Validate phone number format
+    const cleanPhone = phoneNumber.replace(/[^\d]/g, '');
+    if (cleanPhone.length < 10) {
+      return res.status(400).json({
+        message: 'Please enter a valid phone number (at least 10 digits)',
       });
     }
 
@@ -126,6 +134,7 @@ app.post('/register', async (req, res) => {
       name: fullName,
       email,
       password: hashedPassword,
+      phoneNumber: phoneNumber.trim(), // Save the phone number for WhatsApp chat
       verificationToken: crypto.randomBytes(20).toString('hex'),
       verified: false,
     });
@@ -236,7 +245,7 @@ app.post('/api/login', async (req, res) => {
         name: user.name, 
         email: user.email, 
         role: user.role,
-        facebookId: user.facebookId 
+        phoneNumber: user.phoneNumber || ''
       },
     });
   } catch (error) {
@@ -247,7 +256,7 @@ app.post('/api/login', async (req, res) => {
 
 // =================== User Profile Routes ===================
 
-// Update user profile (including Facebook ID)
+// Update user profile (including phone number)
 app.patch('/api/user/profile', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -264,9 +273,9 @@ app.patch('/api/user/profile', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Update Facebook ID if provided
-    if (req.body.facebookId !== undefined) {
-      user.facebookId = req.body.facebookId;
+    // Update phone number if provided
+    if (req.body.phoneNumber !== undefined) {
+      user.phoneNumber = req.body.phoneNumber;
     }
 
     await user.save();
@@ -278,7 +287,7 @@ app.patch('/api/user/profile', async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        facebookId: user.facebookId,
+        phoneNumber: user.phoneNumber || '',
       },
     });
   } catch (error) {
@@ -287,7 +296,7 @@ app.patch('/api/user/profile', async (req, res) => {
   }
 });
 
-// Get user by varsityId (to fetch seller's Facebook ID)
+// Get user by varsityId (to fetch seller's phone number for WhatsApp)
 app.get('/api/user/varsity/:varsityId', async (req, res) => {
   try {
     console.log('Fetching user by varsityId:', req.params.varsityId);
@@ -298,11 +307,11 @@ app.get('/api/user/varsity/:varsityId', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    console.log('User found:', { varsityId: user.varsityId, name: user.name, hasFacebookId: !!user.facebookId });
+    console.log('User found:', { varsityId: user.varsityId, name: user.name, hasPhoneNumber: !!user.phoneNumber });
     res.json({
       varsityId: user.varsityId,
       name: user.name,
-      facebookId: user.facebookId,
+      phoneNumber: user.phoneNumber || '',
     });
   } catch (error) {
     console.error('Error fetching user:', error);
