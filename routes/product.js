@@ -213,4 +213,41 @@ router.post('/:id/ratings', authenticateToken, async (req, res) => {
   }
 });
 
+// Delete product - User can delete their own, Admin can delete any
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    // Check if user is admin or the product owner
+    const isAdmin = req.user.role === 'admin';
+    const isOwner = product.sellerId.toString() === req.user.userId;
+
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ 
+        message: 'You can only delete your own products' 
+      });
+    }
+
+    await Product.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Product deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to delete product' });
+  }
+});
+
+// Get user's products
+router.get('/my-products', authenticateToken, async (req, res) => {
+  try {
+    const products = await Product.find({ sellerId: req.user.userId });
+    res.json(products);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch your products' });
+  }
+});
+
 module.exports = router;
